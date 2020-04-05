@@ -26,6 +26,9 @@ import cloudflow.spark.SparkStreamletContext
 import cloudflow.spark.avro.{ SparkAvroDecoder, SparkAvroEncoder }
 import cloudflow.spark.sql.SQLImplicits._
 import cloudflow.streamlets._
+import org.apache.spark.sql.functions.{ col, struct }
+import za.co.absa.abris.avro.functions.{ from_confluent_avro, to_confluent_avro }
+import za.co.absa.abris.avro.read.confluent.SchemaManager
 
 import scala.reflect.runtime.universe._
 
@@ -66,6 +69,37 @@ class SparkStreamletContextImpl(
     dataframe.as[In]
   }
 
+  def confluentReadStream[In](inPort: CodecInlet[In],
+                              schemaRegistryUrl: String,
+                              schemaId: String = "latest")(implicit encoder: Encoder[In], typeTag: TypeTag[In]): Dataset[In] = {
+
+    implicit val inRowEncoder: ExpressionEncoder[Row] = RowEncoder(encoder.schema)
+    val schema                                        = inPort.schemaAsString
+    val savepointPath                                 = findSavepointPathForPort(inPort)
+    val srcTopic                                      = savepointPath.value
+    val brokers                                       = config.getString("cloudflow.kafka.bootstrap-servers")
+
+    val src: DataFrame = session.readStream
+      .format("kafka")
+      .option("kafka.bootstrap.servers", brokers)
+      .option("maxOffsetsPerTrigger", maxOffsetsPerTrigger)
+      .option("subscribe", srcTopic)
+      // Allow restart of stateful streamlets that may have been offline for longer than the kafka retention period.
+      // This setting may result in data loss in some cases but allows for continuity of the runtime
+      .option("failOnDataLoss", false)
+      .option("startingOffsets", "earliest")
+      .load()
+
+    val schemaRegistryConfig = Map(
+      SchemaManager.PARAM_SCHEMA_REGISTRY_URL          -> schemaRegistryUrl,
+      SchemaManager.PARAM_SCHEMA_REGISTRY_TOPIC        -> srcTopic,
+      SchemaManager.PARAM_VALUE_SCHEMA_NAMING_STRATEGY -> SchemaManager.SchemaStorageNamingStrategies.TOPIC_NAME, // choose a subject name strategy
+      SchemaManager.PARAM_VALUE_SCHEMA_ID              -> schemaId // set to "latest" if you want the latest schema version to used
+    )
+
+    src.select(from_confluent_avro(col("value"), schemaRegistryConfig).as('data)).select("data.*").as[In]
+  }
+
   def writeStream[Out](stream: Dataset[Out], outPort: CodecOutlet[Out], outputMode: OutputMode)(implicit encoder: Encoder[Out],
                                                                                                 typeTag: TypeTag[Out]): StreamingQuery = {
 
@@ -79,6 +113,38 @@ class SparkStreamletContextImpl(
     // metadata checkpoint directory on mount
     val checkpointLocation = checkpointDir(outPort.name)
     val queryName          = s"$streamletRef.$outPort"
+
+    encodedStream.writeStream
+      .outputMode(outputMode)
+      .format("kafka")
+      .queryName(queryName)
+      .option("kafka.bootstrap.servers", brokers)
+      .option("topic", destTopic)
+      .option("checkpointLocation", checkpointLocation)
+      .start()
+  }
+
+  def confluentWriteStream[Out](stream: Dataset[Out], outPort: CodecOutlet[Out], outputMode: OutputMode, schemaRegistryUrl: String)(
+      implicit encoder: Encoder[Out],
+      typeTag: TypeTag[Out]
+  ): StreamingQuery = {
+
+    val savepointPath = findSavepointPathForPort(outPort)
+    val destTopic     = savepointPath.value
+    val brokers       = config.getString("cloudflow.kafka.bootstrap-servers")
+
+    // metadata checkpoint directory on mount
+    val checkpointLocation = checkpointDir(outPort.name)
+    val queryName          = s"$streamletRef.$outPort"
+
+    val schemaRegistryConfig = Map(
+      SchemaManager.PARAM_SCHEMA_REGISTRY_URL          -> schemaRegistryUrl,
+      SchemaManager.PARAM_SCHEMA_REGISTRY_TOPIC        -> destTopic,
+      SchemaManager.PARAM_VALUE_SCHEMA_NAMING_STRATEGY -> SchemaManager.SchemaStorageNamingStrategies.TOPIC_NAME
+    )
+
+    val allColumns    = struct(stream.columns.head, stream.columns.tail: _*)
+    val encodedStream = stream.select(to_confluent_avro(allColumns, outPort.schemaAsString, schemaRegistryConfig).as('value))
 
     encodedStream.writeStream
       .outputMode(outputMode)

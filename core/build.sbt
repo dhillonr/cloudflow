@@ -83,7 +83,8 @@ lazy val akkastream =
             AkkaStreamKafka,
             SprayJson,
             JacksonScalaModule,
-            Ficus
+            Ficus,
+            ConfluentSerializers
           )
     )
 
@@ -170,7 +171,8 @@ lazy val spark =
             SparkSqlKafka,
             SparkStreaming,
             Logback % Test,
-            ScalaTest
+            ScalaTest,
+            ConfluentBridgeSpark
           ),
       libraryDependencies ~= { _.map(_.exclude("org.slf4j", "slf4j-log4j12")) }
     )
@@ -458,6 +460,7 @@ lazy val bintraySettings =
       resolvers ++= Seq(
             "Akka Snapshots".at("https://repo.akka.io/snapshots/"),
             "com-mvn".at("https://repo.lightbend.com/cloudflow"),
+            "confluent".at ("https://packages.confluent.io/maven/"),
             Resolver.url("com-ivy", url("https://repo.lightbend.com/cloudflow"))(Resolver.ivyStylePatterns)
           )
     )
@@ -497,7 +500,10 @@ lazy val commonSettings = bintraySettings ++ Seq(
               "-language:_",
               "-unchecked"
             ),
-        resolvers += "Akka Snapshots".at("https://repo.akka.io/snapshots/"),
+        resolvers ++= Seq(
+          "Akka Snapshots".at("https://repo.akka.io/snapshots/"),
+          "confluent".at ("https://packages.confluent.io/maven/")
+        ),
         scalacOptions in (Compile, console) := (scalacOptions in (Global)).value.filter(_ == "-Ywarn-unused-import"),
         scalacOptions in (Test, console) := (scalacOptions in (Compile, console)).value
       )

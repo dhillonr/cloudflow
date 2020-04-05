@@ -9,6 +9,7 @@ object Version {
   val Spark        = "2.4.5"
   val Flink        = "1.10.0"
   val Kafka        = "2.4.0" 
+  val Confluent    = "5.4.1"
 }
 
 object Library {
@@ -26,6 +27,8 @@ object Library {
   val Ficus                 = "com.iheart"            %% "ficus"                    % "1.4.7"
   val Config                = "com.typesafe"           % "config"                   % "1.3.4"
   val Logback               = "ch.qos.logback"         % "logback-classic"          % "1.2.3"
+  val ConfluentSerializers  = "io.confluent"           % "kafka-avro-serializer"    % Version.Confluent
+  val ConfluentBridgeSpark  = "za.co.absa"             % "abris_2.12"               % "3.1.1"
 
   val SprayJson             = "io.spray"              %% "spray-json"               % "1.3.5"
   val Bijection             = "com.twitter"           %% "bijection-avro"           % "0.9.6"

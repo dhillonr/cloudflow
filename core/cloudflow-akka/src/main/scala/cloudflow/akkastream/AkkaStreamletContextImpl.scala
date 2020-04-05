@@ -17,12 +17,15 @@
 package cloudflow.akkastream
 
 import java.util.concurrent.atomic.AtomicReference
-
 import java.nio.file.{ Files, Paths }
 
+import io.confluent.kafka.serializers.{ AbstractKafkaAvroSerDeConfig, KafkaAvroSerializer }
+import io.confluent.kafka.serializers.{ KafkaAvroDeserializer, KafkaAvroDeserializerConfig }
+import org.apache.kafka.common.serialization._
+
+import scala.collection.JavaConverters._
 import scala.concurrent._
 import scala.util._
-
 import akka._
 import akka.actor.ActorSystem
 import akka.kafka._
@@ -30,13 +33,10 @@ import akka.kafka.ConsumerMessage._
 import akka.kafka.scaladsl._
 import akka.stream._
 import akka.stream.scaladsl._
-
 import com.typesafe.config._
-
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.serialization._
-
 import cloudflow.streamlets._
 
 /**
@@ -91,6 +91,43 @@ final class AkkaStreamletContextImpl(
       .map { case (record, _) ⇒ record }
   }
 
+  def confluentSourceWithOffsetContext[T](inlet: CodecInlet[T],
+                                          schemaRegistryUrl: String): cloudflow.akkastream.scaladsl.SourceWithOffsetContext[T] = {
+    val savepointPath = findSavepointPathForPort(inlet)
+    val topic         = savepointPath.value
+    val gId           = savepointPath.groupId(streamletRef, inlet)
+
+    val kafkaAvroSerDeConfig = Map[String, Any](
+      AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG -> schemaRegistryUrl,
+      KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG -> true.toString
+    )
+
+    val consumerSettings: ConsumerSettings[String, T] = {
+      val kafkaAvroDeserializer = new KafkaAvroDeserializer()
+      kafkaAvroDeserializer.configure(kafkaAvroSerDeConfig.asJava, false)
+      val deserializer = kafkaAvroDeserializer.asInstanceOf[Deserializer[T]]
+
+      ConsumerSettings(system, new StringDeserializer, deserializer)
+        .withBootstrapServers(bootstrapServers)
+        .withGroupId(gId)
+        .withProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+    }
+
+    system.log.info(s"Creating committable source for group: $gId topic: $topic")
+
+    Consumer
+      .sourceWithOffsetContext(consumerSettings, Subscriptions.topics(topic))
+      // TODO clean this up, once SourceWithContext has mapError and mapMaterializedValue
+      .asSource
+      .mapMaterializedValue(_ ⇒ NotUsed) // TODO we should likely use control to gracefully stop.
+      .via(handleTermination)
+      .map {
+        case (record, committableOffset) ⇒ record.value -> committableOffset
+      }
+      .asSourceWithContext { case (_, committableOffset) ⇒ committableOffset }
+      .map { case (record, _) ⇒ record }
+  }
+
   def committableSink[T](outlet: CodecOutlet[T], committerSettings: CommitterSettings): Sink[(T, Committable), NotUsed] = {
     val producerSettings = ProducerSettings(system, new ByteArraySerializer, new ByteArraySerializer)
       .withBootstrapServers(bootstrapServers)
@@ -104,6 +141,35 @@ final class AkkaStreamletContextImpl(
           val bytesKey   = keyBytes(key)
           val bytesValue = outlet.codec.encode(value)
           ProducerMessage.Message(new ProducerRecord(topic, bytesKey, bytesValue), committable)
+      }
+      .via(handleTermination)
+      .toMat(Producer.committableSink(producerSettings, committerSettings))(Keep.left)
+  }
+
+  def confluentCommittableSink[T](outlet: CodecOutlet[T],
+                                  committerSettings: CommitterSettings,
+                                  schemaRegistryUrl: String): Sink[(T, Committable), NotUsed] = {
+
+    val kafkaAvroSerDeConfig = Map[String, Any](
+      AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG -> schemaRegistryUrl,
+      KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG -> true.toString
+    )
+    val producerSettings: ProducerSettings[String, T] = {
+      val kafkaAvroSerializer = new KafkaAvroSerializer()
+      kafkaAvroSerializer.configure(kafkaAvroSerDeConfig.asJava, false)
+      val serializer = kafkaAvroSerializer.asInstanceOf[Serializer[T]]
+
+      ProducerSettings(system, new StringSerializer, serializer)
+        .withBootstrapServers(bootstrapServers)
+    }
+    val savepointPath = findSavepointPathForPort(outlet)
+    val topic         = savepointPath.value
+
+    Flow[(T, Committable)]
+      .map {
+        case (value, committable) ⇒
+          val key = outlet.partitioner(value)
+          ProducerMessage.Message(new ProducerRecord(topic, key, value), committable)
       }
       .via(handleTermination)
       .toMat(Producer.committableSink(producerSettings, committerSettings))(Keep.left)
@@ -130,6 +196,34 @@ final class AkkaStreamletContextImpl(
       .toMat(Producer.committableSink(producerSettings, committerSettings))(Keep.left)
   }
 
+  private[akkastream] def confluentSinkWithOffsetContext[T](outlet: CodecOutlet[T],
+                                                            committerSettings: CommitterSettings,
+                                                            schemaRegistryUrl: String): Sink[(T, CommittableOffset), NotUsed] = {
+
+    val kafkaAvroSerDeConfig = Map[String, Any](
+      AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG -> schemaRegistryUrl,
+      KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG -> true.toString
+    )
+    val producerSettings: ProducerSettings[String, T] = {
+      val kafkaAvroSerializer = new KafkaAvroSerializer()
+      kafkaAvroSerializer.configure(kafkaAvroSerDeConfig.asJava, false)
+      val serializer = kafkaAvroSerializer.asInstanceOf[Serializer[T]]
+
+      ProducerSettings(system, new StringSerializer, serializer)
+        .withBootstrapServers(bootstrapServers)
+    }
+    val savepointPath = findSavepointPathForPort(outlet)
+    val topic         = savepointPath.value
+
+    Flow[(T, CommittableOffset)]
+      .map {
+        case (value, committable) ⇒
+          val key = outlet.partitioner(value)
+          ProducerMessage.Message(new ProducerRecord(topic, key, value), committable)
+      }
+      .toMat(Producer.committableSink(producerSettings, committerSettings))(Keep.left)
+  }
+
   private[akkastream] def sinkWithOffsetContext[T](committerSettings: CommitterSettings): Sink[(T, CommittableOffset), NotUsed] =
     Flow[(T, CommittableOffset)].toMat(Committer.sinkWithOffsetContext(committerSettings))(Keep.left)
 
@@ -152,6 +246,39 @@ final class AkkaStreamletContextImpl(
       }
   }
 
+  def confluentPlainSource[T](inlet: CodecInlet[T],
+                              schemaRegistryUrl: String,
+                              resetPosition: ResetPosition = Latest): Source[T, NotUsed] = {
+    // TODO clean this up, lot of copying code, refactor.
+    val savepointPath = findSavepointPathForPort(inlet)
+    val topic         = savepointPath.value
+    val gId           = savepointPath.groupId(streamletRef, inlet)
+
+    val kafkaAvroSerDeConfig = Map[String, Any](
+      AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG -> schemaRegistryUrl,
+      KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG -> true.toString
+    )
+
+    val consumerSettings: ConsumerSettings[String, T] = {
+      val kafkaAvroDeserializer = new KafkaAvroDeserializer()
+      kafkaAvroDeserializer.configure(kafkaAvroSerDeConfig.asJava, false)
+      val deserializer = kafkaAvroDeserializer.asInstanceOf[Deserializer[T]]
+
+      ConsumerSettings(system, new StringDeserializer, deserializer)
+        .withBootstrapServers(bootstrapServers)
+        .withGroupId(gId)
+        .withProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, resetPosition.autoOffsetReset)
+    }
+
+    Consumer
+      .plainSource(consumerSettings, Subscriptions.topics(topic))
+      .mapMaterializedValue(_ ⇒ NotUsed) // TODO we should likely use control to gracefully stop.
+      .via(handleTermination)
+      .map { record ⇒
+        record.value
+      }
+  }
+
   def plainSink[T](outlet: CodecOutlet[T]): Sink[T, NotUsed] = {
     val producerSettings = ProducerSettings(system, new ByteArraySerializer, new ByteArraySerializer)
       .withBootstrapServers(bootstrapServers)
@@ -164,6 +291,33 @@ final class AkkaStreamletContextImpl(
         val bytesKey   = keyBytes(key)
         val bytesValue = outlet.codec.encode(value)
         new ProducerRecord(topic, bytesKey, bytesValue)
+      }
+      .via(handleTermination)
+      .to(Producer.plainSink(producerSettings))
+      .mapMaterializedValue(_ ⇒ NotUsed)
+  }
+
+  def confluentPlainSink[T](outlet: CodecOutlet[T], schemaRegistryUrl: String): Sink[T, NotUsed] = {
+
+    val kafkaAvroSerDeConfig = Map[String, Any](
+      AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG -> schemaRegistryUrl,
+      KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG -> true.toString
+    )
+    val producerSettings: ProducerSettings[String, T] = {
+      val kafkaAvroSerializer = new KafkaAvroSerializer()
+      kafkaAvroSerializer.configure(kafkaAvroSerDeConfig.asJava, false)
+      val serializer = kafkaAvroSerializer.asInstanceOf[Serializer[T]]
+
+      ProducerSettings(system, new StringSerializer, serializer)
+        .withBootstrapServers(bootstrapServers)
+    }
+    val savepointPath = findSavepointPathForPort(outlet)
+    val topic         = savepointPath.value
+
+    Flow[T]
+      .map { value ⇒
+        val key = outlet.partitioner(value)
+        new ProducerRecord(topic, key, value)
       }
       .via(handleTermination)
       .to(Producer.plainSink(producerSettings))
