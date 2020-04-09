@@ -97,10 +97,11 @@ object LocalRunner extends StreamletLoader {
 
   private def run(appDescriptor: ApplicationDescriptor): Unit = {
 
-    val kafkaPort = 9092
+    val kafkaPort = localConf.getInt("kafka-params.port")
+    val kafkaaddress = localConf.getString("kafka-params.address")
     val topics    = appDescriptor.connections.map(conn ⇒ List(appDescriptor.appId, conn.outletStreamletName, conn.outletName).mkString("."))
 
-    setupKafka(kafkaPort, topics)
+    setupKafka(kafkaaddress, kafkaPort, topics)
 
     val appId      = appDescriptor.appId
     val appVersion = appDescriptor.appVersion
@@ -130,7 +131,7 @@ object LocalRunner extends StreamletLoader {
                             StreamletDeployment.EndpointContainerPort + endpointIdx)
       deployment.endpoint.foreach(_ => endpointIdx += 1)
 
-      val runnerConfigObj      = RunnerConfig(appId, appVersion, deployment, "localhost:" + kafkaPort)
+      val runnerConfigObj      = RunnerConfig(appId, appVersion, deployment, s"$kafkaaddress:" + kafkaPort)
       val runnerConfig         = addStorageConfig(ConfigFactory.parseString(runnerConfigObj.data), localStorageDirectory)
       val streamletParamConfig = streamletParameterConfig.atPath("cloudflow.streamlets")
 
@@ -239,17 +240,17 @@ object LocalRunner extends StreamletLoader {
         Failure(ex)
     }
 
-  private def setupKafka(port: Int, topics: Seq[String]): Unit = {
+  private def setupKafka(address: String, port: Int, topics: Seq[String]): Unit = {
     log.debug(s"Setting up local Kafka on port: $port")
     val config = new Properties()
-    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, s"localhost:${port}")
+    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, s"$address:${port}")
     val localKafkaAdmin = AdminClient.create(config)
     try {
       val tpics = localKafkaAdmin.listTopics
       val names = tpics.names.get
     } catch {
-      case e: InterruptedException => log.error(s"Connection to Kafka on address localhost:$port is not available"); System.exit(-1)
-      case e: ExecutionException   => log.error(s"Connection to Kafka on address localhost:$port is not available"); System.exit(-1)
+      case e: InterruptedException => log.error(s"Connection to Kafka on address $address:$port is not available"); System.exit(-1)
+      case e: ExecutionException   => log.error(s"Connection to Kafka on address $address:$port is not available"); System.exit(-1)
     }
     //    implicit val kafkaConfig = EmbeddedKafkaConfig(kafkaPort = port)
     //    EmbeddedKafka.start()

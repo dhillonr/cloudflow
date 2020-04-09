@@ -35,14 +35,25 @@ import cloudflow.streamlets._
  */
 trait AkkaStreamletContext extends StreamletContext {
   private[akkastream] def sourceWithOffsetContext[T](inlet: CodecInlet[T]): scaladsl.SourceWithOffsetContext[T]
+  private[akkastream] def confluentSourceWithOffsetContext[T](inlet: CodecInlet[T],
+                                                              schemaRegistryUrl: String): scaladsl.SourceWithOffsetContext[T]
   private[akkastream] def plainSource[T](inlet: CodecInlet[T], resetPosition: ResetPosition): Source[T, NotUsed]
+  private[akkastream] def confluentPlainSource[T](inlet: CodecInlet[T],
+                                                  schemaRegistryUrl: String,
+                                                  resetPosition: ResetPosition = Latest): Source[T, NotUsed]
   private[akkastream] def plainSink[T](outlet: CodecOutlet[T]): Sink[T, NotUsed]
-
+  private[akkastream] def confluentPlainSink[T](outlet: CodecOutlet[T], schemaRegistryUrl: String): Sink[T, NotUsed]
   private[akkastream] def committableSink[T](outlet: CodecOutlet[T], committerSettings: CommitterSettings): Sink[(T, Committable), NotUsed]
+  private[akkastream] def confluentCommittableSink[T](outlet: CodecOutlet[T],
+                                                      committerSettings: CommitterSettings,
+                                                      schemaRegistryUrl: String): Sink[(T, Committable), NotUsed]
   private[akkastream] def committableSink[T](committerSettings: CommitterSettings): Sink[(T, Committable), NotUsed]
 
   private[akkastream] def sinkWithOffsetContext[T](outlet: CodecOutlet[T],
                                                    committerSettings: CommitterSettings): Sink[(T, CommittableOffset), NotUsed]
+  private[akkastream] def confluentSinkWithOffsetContext[T](outlet: CodecOutlet[T],
+                                                            committerSettings: CommitterSettings,
+                                                            schemaRegistryUrl: String): Sink[(T, CommittableOffset), NotUsed]
   private[akkastream] def sinkWithOffsetContext[T](committerSettings: CommitterSettings): Sink[(T, CommittableOffset), NotUsed]
 
   /**

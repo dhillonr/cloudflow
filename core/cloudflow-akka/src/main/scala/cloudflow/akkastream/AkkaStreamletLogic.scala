@@ -112,6 +112,9 @@ abstract class AkkaStreamletLogic(implicit val context: AkkaStreamletContext) ex
    */
   def sourceWithOffsetContext[T](inlet: CodecInlet[T]): scaladsl.SourceWithOffsetContext[T] = context.sourceWithOffsetContext(inlet)
 
+  def confluentSourceWithOffsetContext[T](inlet: CodecInlet[T], schemaRegistryUrl: String): scaladsl.SourceWithOffsetContext[T] =
+    context.confluentSourceWithOffsetContext(inlet, schemaRegistryUrl)
+
   /**
    * Java API
    */
@@ -132,6 +135,11 @@ abstract class AkkaStreamletLogic(implicit val context: AkkaStreamletContext) ex
   def plainSource[T](inlet: CodecInlet[T], resetPosition: ResetPosition = Latest): akka.stream.scaladsl.Source[T, NotUsed] =
     context.plainSource(inlet, resetPosition)
 
+  def confluentPlainSource[T](inlet: CodecInlet[T],
+                              schemaRegistryUrl: String,
+                              resetPosition: ResetPosition = Latest): akka.stream.scaladsl.Source[T, NotUsed] =
+    context.confluentPlainSource(inlet, schemaRegistryUrl, resetPosition)
+
   /**
    * Java API
    */
@@ -148,6 +156,9 @@ abstract class AkkaStreamletLogic(implicit val context: AkkaStreamletContext) ex
    * The `outlet` specifies a [[cloudflow.streamlets.Codec]] that will be used to serialize the records that are written to Kafka.
    */
   def plainSink[T](outlet: CodecOutlet[T]): Sink[T, NotUsed] = context.plainSink(outlet)
+
+  def confluentPlainSink[T](outlet: CodecOutlet[T], schemaRegistryUrl: String): Sink[T, NotUsed] =
+    context.confluentPlainSink(outlet, schemaRegistryUrl)
 
   /**
    * Java API
@@ -175,6 +186,11 @@ abstract class AkkaStreamletLogic(implicit val context: AkkaStreamletContext) ex
                          committerSettings: CommitterSettings = defaultCommitterSettings): Sink[(T, Committable), NotUsed] =
     context.committableSink(outlet, committerSettings)
 
+  def confluentCommittableSink[T](outlet: CodecOutlet[T],
+                                  committerSettings: CommitterSettings,
+                                  schemaRegistryUrl: String): Sink[(T, Committable), NotUsed] =
+    context.confluentCommittableSink(outlet, committerSettings, schemaRegistryUrl)
+
   /**
    * Creates a sink, purely for committing the offsets that have been read further upstream.
    * Batches offsets from the contexts that accompany the records, and commits these to Kafka.
@@ -200,6 +216,11 @@ abstract class AkkaStreamletLogic(implicit val context: AkkaStreamletContext) ex
   def sinkWithOffsetContext[T](outlet: CodecOutlet[T],
                                committerSettings: CommitterSettings = defaultCommitterSettings): Sink[(T, CommittableOffset), NotUsed] =
     context.sinkWithOffsetContext(outlet, committerSettings)
+
+  def confluentSinkWithOffsetContext[T](outlet: CodecOutlet[T],
+                                        committerSettings: CommitterSettings,
+                                        schemaRegistryUrl: String): Sink[(T, CommittableOffset), NotUsed] =
+    context.confluentSinkWithOffsetContext(outlet, committerSettings, schemaRegistryUrl)
 
   /**
    * Creates a sink, purely for committing the offsets that have been read further upstream.

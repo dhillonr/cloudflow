@@ -68,6 +68,24 @@ private[testkit] case class TestContext(
       )
       .getOrElse(throw TestContextException(inlet.name, s"Bad test context, could not find source for inlet ${inlet.name}"))
 
+  def confluentSourceWithOffsetContext[T](inlet: CodecInlet[T],
+                                          schemaRegistryUrl: String): cloudflow.akkastream.scaladsl.SourceWithOffsetContext[T] =
+    inletTaps
+      .find(_.portName == inlet.name)
+      .map(
+        _.source
+          .asInstanceOf[Source[(T, CommittableOffset), NotUsed]]
+          .via(killSwitch.flow)
+          .mapError {
+            case cause: Throwable ⇒
+              completionPromise.failure(cause)
+              cause
+          }
+          .asSourceWithContext(_._2)
+          .map(_._1)
+      )
+      .getOrElse(throw TestContextException(inlet.name, s"Bad test context, could not find source for inlet ${inlet.name}"))
+
   private def flowWithCommittableContext[T](outlet: CodecOutlet[T]): cloudflow.akkastream.scaladsl.FlowWithCommittableContext[T, T] = {
     val flow = Flow[T]
 
@@ -93,6 +111,10 @@ private[testkit] case class TestContext(
     Flow[(T, Committable)].toMat(Sink.ignore)(Keep.left)
   def committableSink[T](outlet: CodecOutlet[T], committerSettings: CommitterSettings): Sink[(T, Committable), NotUsed] =
     flowWithCommittableContext[T](outlet).asFlow.toMat(Sink.ignore)(Keep.left)
+  def confluentCommittableSink[T](outlet: CodecOutlet[T],
+                                  committerSettings: CommitterSettings,
+                                  schemaRegistryUrl: String): Sink[(T, Committable), NotUsed] =
+    flowWithCommittableContext[T](outlet).asFlow.toMat(Sink.ignore)(Keep.left)
 
   @deprecated("Use `committableSink` instead.", "1.3.1")
   def sinkWithOffsetContext[T](committerSettings: CommitterSettings): Sink[(T, CommittableOffset), NotUsed] =
@@ -102,9 +124,19 @@ private[testkit] case class TestContext(
   def sinkWithOffsetContext[T](outlet: CodecOutlet[T], committerSettings: CommitterSettings): Sink[(T, CommittableOffset), NotUsed] =
     flowWithCommittableContext[T](outlet).asFlow.toMat(Sink.ignore)(Keep.left)
 
+  def confluentSinkWithOffsetContext[T](outlet: CodecOutlet[T],
+                                        committerSettings: CommitterSettings,
+                                        schemaRegistryUrl: String): Sink[(T, CommittableOffset), NotUsed] =
+    flowWithCommittableContext[T](outlet).asFlow.toMat(Sink.ignore)(Keep.left)
+
   def plainSource[T](inlet: CodecInlet[T], resetPosition: ResetPosition): Source[T, NotUsed] =
     sourceWithOffsetContext[T](inlet).asSource.map(_._1).mapMaterializedValue(_ ⇒ NotUsed)
+  def confluentPlainSource[T](inlet: CodecInlet[T], schemaRegistryUrl: String, resetPosition: ResetPosition = Latest): Source[T, NotUsed] =
+    sourceWithOffsetContext[T](inlet).asSource.map(_._1).mapMaterializedValue(_ ⇒ NotUsed)
   def plainSink[T](outlet: CodecOutlet[T]): Sink[T, NotUsed] = sinkRef[T](outlet).sink.contramap { el ⇒
+    (el, TestCommittableOffset())
+  }
+  def confluentPlainSink[T](outlet: CodecOutlet[T], schemaRegistryUrl: String): Sink[T, NotUsed] = sinkRef[T](outlet).sink.contramap { el ⇒
     (el, TestCommittableOffset())
   }
   def sinkRef[T](outlet: CodecOutlet[T]): WritableSinkRef[T] =

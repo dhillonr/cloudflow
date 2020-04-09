@@ -45,6 +45,11 @@ abstract case class SparkStreamletContext(
    */
   def readStream[In](inPort: CodecInlet[In])(implicit encoder: Encoder[In], typeTag: TypeTag[In]): Dataset[In]
 
+  def confluentReadStream[In](inPort: CodecInlet[In], schemaRegistryUrl: String, schemaId: String = "latest")(
+      implicit encoder: Encoder[In],
+      typeTag: TypeTag[In]
+  ): Dataset[In]
+
   /**
    * Start the execution of a StreamingQuery that writes the encodedStream to
    * an external storage using the designated portOut
@@ -57,5 +62,10 @@ abstract case class SparkStreamletContext(
    */
   def writeStream[Out](stream: Dataset[Out], outPort: CodecOutlet[Out], outputMode: OutputMode)(implicit encoder: Encoder[Out],
                                                                                                 typeTag: TypeTag[Out]): StreamingQuery
+
+  def confluentWriteStream[Out](stream: Dataset[Out], outPort: CodecOutlet[Out], outputMode: OutputMode, schemaRegistryUrl: String)(
+      implicit encoder: Encoder[Out],
+      typeTag: TypeTag[Out]
+  ): StreamingQuery
 
 }

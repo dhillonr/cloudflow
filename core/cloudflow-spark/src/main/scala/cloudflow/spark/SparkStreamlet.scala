@@ -215,6 +215,11 @@ abstract class SparkStreamletLogic(implicit val context: SparkStreamletContext) 
   final def readStream[In](inPort: CodecInlet[In])(implicit encoder: Encoder[In], typeTag: TypeTag[In]): Dataset[In] =
     context.readStream(inPort)
 
+  final def confluentReadStream[In](inPort: CodecInlet[In],
+                                    schemaRegistryUrl: String,
+                                    schemaId: String = "latest")(implicit encoder: Encoder[In], typeTag: TypeTag[In]): Dataset[In] =
+    context.confluentReadStream(inPort, schemaRegistryUrl, schemaId)
+
   /**
    * Write a `StreamingQuery` into outlet using the specified `OutputMode`
    */
@@ -222,6 +227,11 @@ abstract class SparkStreamletLogic(implicit val context: SparkStreamletContext) 
       implicit encoder: Encoder[Out],
       typeTag: TypeTag[Out]
   ): StreamingQuery = context.writeStream(stream, outPort, outputMode)
+
+  def confluentWriteStream[Out](stream: Dataset[Out], outPort: CodecOutlet[Out], outputMode: OutputMode, schemaRegistryUrl: String)(
+      implicit encoder: Encoder[Out],
+      typeTag: TypeTag[Out]
+  ): StreamingQuery = context.confluentWriteStream(stream, outPort, outputMode, schemaRegistryUrl)
 
   final def config: Config = context.config
 

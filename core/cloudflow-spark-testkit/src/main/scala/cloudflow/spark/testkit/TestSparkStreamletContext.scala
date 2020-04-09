@@ -52,9 +52,43 @@ private[testkit] class TestSparkStreamletContext(override val streamletRef: Stri
       .map(_.instream.asInstanceOf[MemoryStream[In]].toDF.as[In])
       .getOrElse(throw TestContextException(inPort.name, s"Bad test context, could not find source for inlet ${inPort.name}"))
 
+  override def confluentReadStream[In](inPort: CodecInlet[In],
+                                       schemaRegistryUrl: String,
+                                       schemaId: String = "latest")(implicit encoder: Encoder[In], typeTag: TypeTag[In]): Dataset[In] =
+    inletTaps
+      .find(_.portName == inPort.name)
+      .map(_.instream.asInstanceOf[MemoryStream[In]].toDF.as[In])
+      .getOrElse(throw TestContextException(inPort.name, s"Bad test context, could not find source for inlet ${inPort.name}"))
+
   override def writeStream[Out](stream: Dataset[Out],
                                 outPort: CodecOutlet[Out],
                                 outputMode: OutputMode)(implicit encoder: Encoder[Out], typeTag: TypeTag[Out]): StreamingQuery = {
+    // RateSource can only work with a microBatch query because it contains no data at time zero.
+    // Trigger.Once requires data at start to  work.
+    val trigger = if (isRateSource(stream)) Trigger.ProcessingTime(ProcessingTimeInterval) else Trigger.Once()
+    println(s"*****************************************")
+    println(s"TestSparkStreamletContext: Using $trigger")
+    println(s"*****************************************")
+    outletTaps
+      .find(_.portName == outPort.name)
+      .map { outletTap ⇒
+        stream.writeStream
+          .outputMode(outputMode)
+          .format("memory")
+          .trigger(trigger)
+          .queryName(outletTap.queryName)
+          .start()
+      }
+      .getOrElse(throw TestContextException(outPort.name, s"Bad test context, could not find destination for outlet ${outPort.name}"))
+  }
+
+  override def confluentWriteStream[Out](stream: Dataset[Out],
+                                         outPort: CodecOutlet[Out],
+                                         outputMode: OutputMode,
+                                         schemaRegistryUrl: String)(
+      implicit encoder: Encoder[Out],
+      typeTag: TypeTag[Out]
+  ): StreamingQuery = {
     // RateSource can only work with a microBatch query because it contains no data at time zero.
     // Trigger.Once requires data at start to  work.
     val trigger = if (isRateSource(stream)) Trigger.ProcessingTime(ProcessingTimeInterval) else Trigger.Once()
