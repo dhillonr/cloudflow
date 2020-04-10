@@ -187,9 +187,9 @@ abstract class AkkaStreamletLogic(implicit val context: AkkaStreamletContext) ex
     context.committableSink(outlet, committerSettings)
 
   def confluentCommittableSink[T](outlet: CodecOutlet[T],
-                                  committerSettings: CommitterSettings,
-                                  schemaRegistryUrl: String): Sink[(T, Committable), NotUsed] =
-    context.confluentCommittableSink(outlet, committerSettings, schemaRegistryUrl)
+                                  schemaRegistryUrl: String,
+                                  committerSettings: CommitterSettings=defaultCommitterSettings): Sink[(T, Committable), NotUsed] =
+    context.confluentCommittableSink(outlet, schemaRegistryUrl, committerSettings)
 
   /**
    * Creates a sink, purely for committing the offsets that have been read further upstream.
@@ -218,9 +218,10 @@ abstract class AkkaStreamletLogic(implicit val context: AkkaStreamletContext) ex
     context.sinkWithOffsetContext(outlet, committerSettings)
 
   def confluentSinkWithOffsetContext[T](outlet: CodecOutlet[T],
-                                        committerSettings: CommitterSettings,
-                                        schemaRegistryUrl: String): Sink[(T, CommittableOffset), NotUsed] =
-    context.confluentSinkWithOffsetContext(outlet, committerSettings, schemaRegistryUrl)
+                                        schemaRegistryUrl: String,
+                                        committerSettings: CommitterSettings = defaultCommitterSettings
+                                        ): Sink[(T, CommittableOffset), NotUsed] =
+    context.confluentSinkWithOffsetContext(outlet, schemaRegistryUrl, committerSettings)
 
   /**
    * Creates a sink, purely for committing the offsets that have been read further upstream.

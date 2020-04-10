@@ -97,9 +97,11 @@ object LocalRunner extends StreamletLoader {
 
   private def run(appDescriptor: ApplicationDescriptor): Unit = {
 
-    val kafkaPort = localConf.getInt("kafka-params.port")
+    val kafkaPort    = localConf.getInt("kafka-params.port")
     val kafkaaddress = localConf.getString("kafka-params.address")
-    val topics    = appDescriptor.connections.map(conn ⇒ List(appDescriptor.appId, conn.outletStreamletName, conn.outletName).mkString("."))
+    log.info(s"Read port $kafkaPort from config file")
+    log.info(s"Read address $kafkaaddress from config file")
+    val topics = appDescriptor.connections.map(conn ⇒ List(appDescriptor.appId, conn.outletStreamletName, conn.outletName).mkString("."))
 
     setupKafka(kafkaaddress, kafkaPort, topics)
 
@@ -130,8 +132,9 @@ object LocalRunner extends StreamletLoader {
                             appDescriptor.connections,
                             StreamletDeployment.EndpointContainerPort + endpointIdx)
       deployment.endpoint.foreach(_ => endpointIdx += 1)
-
-      val runnerConfigObj      = RunnerConfig(appId, appVersion, deployment, s"$kafkaaddress:" + kafkaPort)
+      val bootstrapServer = s"$kafkaaddress:" + kafkaPort
+      log.info(s"Bootstrap server $bootstrapServer will be used for deployment")
+      val runnerConfigObj      = RunnerConfig(appId, appVersion, deployment, bootstrapServer)
       val runnerConfig         = addStorageConfig(ConfigFactory.parseString(runnerConfigObj.data), localStorageDirectory)
       val streamletParamConfig = streamletParameterConfig.atPath("cloudflow.streamlets")
 

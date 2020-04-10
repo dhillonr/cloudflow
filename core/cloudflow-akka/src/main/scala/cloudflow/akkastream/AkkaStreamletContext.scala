@@ -45,15 +45,15 @@ trait AkkaStreamletContext extends StreamletContext {
   private[akkastream] def confluentPlainSink[T](outlet: CodecOutlet[T], schemaRegistryUrl: String): Sink[T, NotUsed]
   private[akkastream] def committableSink[T](outlet: CodecOutlet[T], committerSettings: CommitterSettings): Sink[(T, Committable), NotUsed]
   private[akkastream] def confluentCommittableSink[T](outlet: CodecOutlet[T],
-                                                      committerSettings: CommitterSettings,
-                                                      schemaRegistryUrl: String): Sink[(T, Committable), NotUsed]
+                                                      schemaRegistryUrl: String,
+                                                      committerSettings: CommitterSettings): Sink[(T, Committable), NotUsed]
   private[akkastream] def committableSink[T](committerSettings: CommitterSettings): Sink[(T, Committable), NotUsed]
 
   private[akkastream] def sinkWithOffsetContext[T](outlet: CodecOutlet[T],
                                                    committerSettings: CommitterSettings): Sink[(T, CommittableOffset), NotUsed]
   private[akkastream] def confluentSinkWithOffsetContext[T](outlet: CodecOutlet[T],
-                                                            committerSettings: CommitterSettings,
-                                                            schemaRegistryUrl: String): Sink[(T, CommittableOffset), NotUsed]
+                                                            schemaRegistryUrl: String,
+                                                            committerSettings: CommitterSettings): Sink[(T, CommittableOffset), NotUsed]
   private[akkastream] def sinkWithOffsetContext[T](committerSettings: CommitterSettings): Sink[(T, CommittableOffset), NotUsed]
 
   /**
