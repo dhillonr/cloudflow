@@ -453,7 +453,7 @@ def cloudflowModule(moduleID: String): Project =
 lazy val bintraySettings =
   if (BintrayPlugin.isEnabledViaProp) {
     Seq(
-      bintrayOrganization := Some("lightbend"),
+      bintrayOrganization := Some("pencilerazer"),
       bintrayRepository := "cloudflow",
       bintrayOmitLicense := true,
       publishMavenStyle := false,
@@ -461,7 +461,7 @@ lazy val bintraySettings =
             "Akka Snapshots".at("https://repo.akka.io/snapshots/"),
             "com-mvn".at("https://repo.lightbend.com/cloudflow"),
             "confluent".at ("https://packages.confluent.io/maven/"),
-            Resolver.url("com-ivy", url("https://repo.lightbend.com/cloudflow"))(Resolver.ivyStylePatterns)
+            Resolver.url("com-ivy", url("https://pencilerazer.bintray.com/cloudflow"))(Resolver.ivyStylePatterns)
           )
     )
   } else Seq.empty
