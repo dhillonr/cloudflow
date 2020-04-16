@@ -147,8 +147,8 @@ final class AkkaStreamletContextImpl(
   }
 
   def confluentCommittableSink[T](outlet: CodecOutlet[T],
-                                  committerSettings: CommitterSettings,
-                                  schemaRegistryUrl: String): Sink[(T, Committable), NotUsed] = {
+                                  schemaRegistryUrl: String,
+                                  committerSettings: CommitterSettings): Sink[(T, Committable), NotUsed] = {
 
     val kafkaAvroSerDeConfig = Map[String, Any](
       AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG -> schemaRegistryUrl,
@@ -197,8 +197,8 @@ final class AkkaStreamletContextImpl(
   }
 
   private[akkastream] def confluentSinkWithOffsetContext[T](outlet: CodecOutlet[T],
-                                                            committerSettings: CommitterSettings,
-                                                            schemaRegistryUrl: String): Sink[(T, CommittableOffset), NotUsed] = {
+                                                            schemaRegistryUrl: String,
+                                                            committerSettings: CommitterSettings): Sink[(T, CommittableOffset), NotUsed] = {
 
     val kafkaAvroSerDeConfig = Map[String, Any](
       AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG -> schemaRegistryUrl,

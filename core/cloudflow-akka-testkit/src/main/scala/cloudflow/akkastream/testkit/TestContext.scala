@@ -112,8 +112,8 @@ private[testkit] case class TestContext(
   def committableSink[T](outlet: CodecOutlet[T], committerSettings: CommitterSettings): Sink[(T, Committable), NotUsed] =
     flowWithCommittableContext[T](outlet).asFlow.toMat(Sink.ignore)(Keep.left)
   def confluentCommittableSink[T](outlet: CodecOutlet[T],
-                                  committerSettings: CommitterSettings,
-                                  schemaRegistryUrl: String): Sink[(T, Committable), NotUsed] =
+                                  schemaRegistryUrl: String,
+                                  committerSettings: CommitterSettings): Sink[(T, Committable), NotUsed] =
     flowWithCommittableContext[T](outlet).asFlow.toMat(Sink.ignore)(Keep.left)
 
   @deprecated("Use `committableSink` instead.", "1.3.1")
@@ -125,8 +125,8 @@ private[testkit] case class TestContext(
     flowWithCommittableContext[T](outlet).asFlow.toMat(Sink.ignore)(Keep.left)
 
   def confluentSinkWithOffsetContext[T](outlet: CodecOutlet[T],
-                                        committerSettings: CommitterSettings,
-                                        schemaRegistryUrl: String): Sink[(T, CommittableOffset), NotUsed] =
+                                        schemaRegistryUrl: String,
+                                        committerSettings: CommitterSettings): Sink[(T, CommittableOffset), NotUsed] =
     flowWithCommittableContext[T](outlet).asFlow.toMat(Sink.ignore)(Keep.left)
 
   def plainSource[T](inlet: CodecInlet[T], resetPosition: ResetPosition): Source[T, NotUsed] =

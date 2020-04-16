@@ -188,7 +188,7 @@ abstract class AkkaStreamletLogic(implicit val context: AkkaStreamletContext) ex
 
   def confluentCommittableSink[T](outlet: CodecOutlet[T],
                                   schemaRegistryUrl: String,
-                                  committerSettings: CommitterSettings=defaultCommitterSettings): Sink[(T, Committable), NotUsed] =
+                                  committerSettings: CommitterSettings = defaultCommitterSettings): Sink[(T, Committable), NotUsed] =
     context.confluentCommittableSink(outlet, schemaRegistryUrl, committerSettings)
 
   /**
@@ -217,10 +217,11 @@ abstract class AkkaStreamletLogic(implicit val context: AkkaStreamletContext) ex
                                committerSettings: CommitterSettings = defaultCommitterSettings): Sink[(T, CommittableOffset), NotUsed] =
     context.sinkWithOffsetContext(outlet, committerSettings)
 
-  def confluentSinkWithOffsetContext[T](outlet: CodecOutlet[T],
-                                        schemaRegistryUrl: String,
-                                        committerSettings: CommitterSettings = defaultCommitterSettings
-                                        ): Sink[(T, CommittableOffset), NotUsed] =
+  def confluentSinkWithOffsetContext[T](
+      outlet: CodecOutlet[T],
+      schemaRegistryUrl: String,
+      committerSettings: CommitterSettings = defaultCommitterSettings
+  ): Sink[(T, CommittableOffset), NotUsed] =
     context.confluentSinkWithOffsetContext(outlet, schemaRegistryUrl, committerSettings)
 
   /**
