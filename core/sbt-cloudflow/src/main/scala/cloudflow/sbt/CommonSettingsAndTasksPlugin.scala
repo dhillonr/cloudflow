@@ -44,7 +44,7 @@ object CommonSettingsAndTasksPlugin extends AutoPlugin {
   final val CloudflowLocalConfigFile = ".lightbend/cloudflow/pipectl.json"
   final val CloudflowDockerBaseImage = "lightbend/cloudflow-base:1.3.1-spark-2.4.5-flink-1.10.0-scala-2.12"
   // used for internal release
-  final val CloudflowBintrayReleasesRepoUrl = "https://lightbend.bintray.com/cloudflow"
+  final val CloudflowBintrayReleasesRepoUrl = "https://pencilerazer.bintray.com/cloudflow"
 
   /** Set default values for keys. */
   override def projectSettings = Seq(
